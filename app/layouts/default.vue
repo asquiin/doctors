@@ -1,11 +1,10 @@
-<!-- layouts/default.vue -->
-<script setup>
-import AppHeader from '~/components/AppHeader.vue'
-</script>
-
 <template>
-  <div>
-    <AppHeader />
-    <main><slot /></main>
-  </div>
+  <header class="p-4 bg-gray-800 text-white flex justify-between">
+    <NuxtLink to="/">Главная</NuxtLink>
+    <nav class="flex gap-3">
+      <NuxtLink to="/login">Логин</NuxtLink>
+    </nav>
+  </header>
+
+      <main class="flex-1"><slot /></main>
 </template>
