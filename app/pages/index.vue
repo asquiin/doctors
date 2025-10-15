@@ -1,4 +1,20 @@
-<!-- pages/index.vue -->
+<script setup>
+const requests = useRequestsStore()
+const { data, loading, error } = storeToRefs(requests)
+
+onMounted(() => {
+  requests.getData({
+    page: 1,
+    sortBy: 'rating',
+    sortOrder: 'desc',
+  })
+})
+</script>
+
 <template>
-  <h1 class="p-6">Главная страница</h1>
+  <div class="p-6">
+    <p v-if="loading">Загрузка…</p>
+    <p v-else-if="error" class="text-red-500">Ошибка: {{ error }}</p>
+    <pre v-else>{{ data }}</pre>
+  </div>
 </template>
