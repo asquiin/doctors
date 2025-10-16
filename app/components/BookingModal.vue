@@ -20,7 +20,6 @@ const route = useRoute()
 const router = useRouter()
 const store = useRequestsStore()
 
-// если не авторизован — на /login с возвратом на эту же страницу (с текущими query)
 onMounted(async () => {
   if (!store.token) {
     return router.replace({
@@ -41,7 +40,6 @@ const slotPreview = computed(() => {
   try { return props.start ? kzDateTime.format(new Date(props.start)) : '' } catch { return '' }
 })
 
-// --- поля формы ---
 const complaints = ref<string>('')
 const diseases   = ref<string>('')
 const heightCm   = ref<number | null>(null)
@@ -70,7 +68,6 @@ function onFileChange(e: Event) {
   file.value = f
 }
 
-// валидация
 const complaintsValid = computed(() => complaints.value.trim().length > 0)
 const heightValid = computed(() => typeof heightCm.value === 'number' && heightCm.value >= 50 && heightCm.value <= 250)
 const weightValid = computed(() => typeof weightKg.value === 'number' && weightKg.value >= 20 && weightKg.value <= 300)
@@ -78,7 +75,6 @@ const canSubmit = computed(() => !!store.token && complaintsValid.value && heigh
 
 async function fileToBase64(f: File): Promise<string> {
   const buf = await f.arrayBuffer()
-  // base64
   let binary = ''
   const bytes = new Uint8Array(buf)
   const chunk = 0x8000
@@ -94,7 +90,6 @@ async function submit() {
   formError.value = null
   formOk.value = null
 
-  // общие поля
   const baseFields = {
     scheduleSlotId: props.slotId,
     complaints: complaints.value.trim(),
@@ -104,7 +99,6 @@ async function submit() {
   }
 
   try {
-    // === Попытка №1: multipart/form-data ===
     const fd = new FormData()
     fd.append('scheduleSlotId', baseFields.scheduleSlotId)
     fd.append('complaints', baseFields.complaints)
@@ -112,7 +106,7 @@ async function submit() {
     fd.append('height', String(baseFields.height))
     fd.append('weight', String(baseFields.weight))
     if (file.value) {
-      // Ключ именно "file" — как ожидает большинство Swagger-схем (string($binary))
+
       fd.append('file', file.value, file.value.name)
     }
 
@@ -121,12 +115,10 @@ async function submit() {
     formOk.value = 'Запись успешно создана'
     setTimeout(() => { emit('success'); emit('close') }, 500)
   } catch (err: any) {
-    // === Фолбэк: JSON + base64 ===
     try {
-      if (!file.value) throw err // без файла повторять смысла нет
+      if (!file.value) throw err 
 
       const b64 = await fileToBase64(file.value)
-      // чаще всего поле называется тоже "file", но если у тебя в бэке другое — замени здесь
       const jsonBody: Record<string, any> = {
         ...baseFields,
         file: b64,
@@ -134,9 +126,11 @@ async function submit() {
         fileType: file.value.type || 'application/octet-stream',
       }
 
-      await store.postData('/appointments', jsonBody, 'POST') // $fetch сам поставит application/json
+      await store.postData('/appointments', jsonBody, 'POST') 
 
       formOk.value = 'Запись успешно создана'
+
+      alert("Запись успешно создана!")
       setTimeout(() => { emit('success'); emit('close') }, 500)
     } catch (e2: any) {
       formError.value = e2?.message || err?.message || 'Не удалось создать запись'
@@ -151,12 +145,10 @@ function close() { emit('close') }
 
 
 <template>
-  <!-- Teleport модалки на body -->
   <Teleport to="body">
     <div class="fixed inset-0 z-50">
-      <!-- backdrop -->
       <div class="absolute inset-0 bg-black/40" @click="close" />
-      <!-- modal -->
+
       <div class="absolute inset-0 flex items-center justify-center p-4">
         <div class="w-full max-w-xl bg-white rounded-2xl shadow-xl p-6 space-y-5">
           <div class="flex items-start justify-between">
