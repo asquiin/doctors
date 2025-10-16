@@ -86,13 +86,13 @@ async function submit() {
 
   try {
     const fd = new FormData()
-    fd.append('doctorId', props.doctorId)
-    fd.append('slotId', props.slotId)
+
+    fd.append('scheduleSlotId', props.slotId)
     fd.append('complaints', complaints.value.trim())
-    if (diseases.value.trim()) fd.append('diseases', diseases.value.trim())
-    fd.append('heightCm', String(heightCm.value))
-    fd.append('weightKg', String(weightKg.value))
-    if (file.value) fd.append('attachment', file.value)
+    if (diseases.value.trim()) fd.append('chronicDiseases', diseases.value.trim())
+    fd.append('height', String(heightCm.value))
+    fd.append('weight', String(weightKg.value))
+    if (file.value) fd.append('testResults', file.value)
 
     await $fetch(`${apiBase}/appointments`, {
       method: 'POST',
