@@ -1,169 +1,223 @@
 <!-- pages/doctors/[id].vue -->
-<script setup>
+<script setup lang="ts">
 import { useRoute } from 'vue-router'
 
-const route = useRoute()
-const id = computed(() => route.params.id)
+/** ===== Типы API ===== */
+type ISO = string
 
-// базовый URL берём из runtimeConfig
+export interface DoctorSlot {
+  id: string
+  startTime: ISO
+  endTime: ISO
+}
+
+export interface DoctorFull {
+  id: string
+  name: string
+  specialty: string
+  specialtyName?: string
+  rating?: number
+  reviewCount?: number
+  experience?: number
+  price?: number
+  avatar?: string
+  education?: string
+  description?: string
+  achievements?: string[]
+}
+
+export interface Review {
+  id: string
+  patientName?: string
+  rating?: number
+  text?: string
+  comment?: string
+  date?: ISO
+  createdAt?: ISO
+}
+
+export interface ReviewsResponseFlat {
+  items: Review[]
+  total: number
+}
+export interface ReviewsResponsePaged {
+  reviews: Review[]
+  pagination: { total: number }
+}
+
+/** Расписание от твоего API — плоский массив слотов */
+export type ScheduleResponse = DoctorSlot[]
+
+/** Структура, с которой удобно работать в UI */
+export interface WeekDay {
+  date: string;                 // 'YYYY-MM-DD'
+  slots: DoctorSlot[];
+  isWeekend: boolean;
+}
+
+/** ===== Параметры роутинга/конфиг ===== */
+const route = useRoute()
+const id = computed<string>(() => route.params.id as string)
+
 const { public: { apiBase } } = useRuntimeConfig()
 
-// ====== Состояние ======
-const doctor = ref(null)
-const loadingDoctor = ref(false)
-const errorDoctor = ref(null)
+/** ===== Состояние врача ===== */
+const doctor = ref<DoctorFull | null>(null)
+const loadingDoctor = ref<boolean>(false)
+const errorDoctor = ref<string | null>(null)
 
-const week = ref([])           // [{date, slots: [{id,startTime,endTime}], isWeekend?}]
-const loadingSchedule = ref(false)
-const errorSchedule = ref(null)
+/** ===== Состояние расписания ===== */
+const week = ref<WeekDay[]>([])
+const loadingSchedule = ref<boolean>(false)
+const errorSchedule = ref<string | null>(null)
 
-const selectedDate = ref(null) // ISO дня из week
-const selectedSlots = computed(() => {
+const selectedDate = ref<string | null>(null)
+const selectedSlots = computed<DoctorSlot[]>(() => {
   const day = week.value.find(d => d.date === selectedDate.value)
   return day?.slots ?? []
 })
 
-// Отзывы
-const reviews = ref([])
-const reviewsLoading = ref(false)
-const reviewsError = ref(null)
-const reviewsPage = ref(1)
-const reviewsLimit = ref(6)
-const reviewsSortBy = ref('date')     // 'date' | 'rating'
-const reviewsSortOrder = ref('desc')  // 'asc' | 'desc'
-const reviewsTotal = ref(0)
-const reviewsPages = computed(() => Math.max(1, Math.ceil(reviewsTotal.value / reviewsLimit.value)))
+/** ===== Состояние отзывов ===== */
+const reviews = ref<Review[]>([])
+const reviewsLoading = ref<boolean>(false)
+const reviewsError = ref<string | null>(null)
+const reviewsPage = ref<number>(1)
+const reviewsLimit = ref<number>(6)
+const reviewsSortBy = ref<'date' | 'rating'>('date')
+const reviewsSortOrder = ref<'asc' | 'desc'>('desc')
+const reviewsTotal = ref<number>(0)
+const reviewsPages = computed<number>(() => Math.max(1, Math.ceil(reviewsTotal.value / reviewsLimit.value)))
 
+/** ===== Форматтеры ===== */
+function dayKeyFromISO(iso: ISO): string {
+  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Almaty' }) // YYYY-MM-DD
+}
+const kzDate = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Asia/Almaty'
+})
+const kzTime = new Intl.DateTimeFormat('ru-RU', {
+  hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Almaty'
+})
+function fmtDateKey(dateKey: string): string {
+  try { return kzDate.format(new Date(`${dateKey}T00:00:00`)) } catch { return dateKey }
+}
+function fmtTime(iso: ISO): string {
+  try { return kzTime.format(new Date(iso)) } catch { return '' }
+}
+function isWeekendByKey(dateKey: string): boolean {
+  const d = new Date(`${dateKey}T00:00:00`)
+  const day = d.getDay() // 0=Вс,6=Сб
+  return day === 0 || day === 6
+}
 
-
-// ====== Загрузчики ======
-async function fetchDoctor() {
+/** ===== Загрузчики ===== */
+async function fetchDoctor(): Promise<void> {
   loadingDoctor.value = true
   errorDoctor.value = null
   try {
-    const res = await $fetch(`${apiBase}/doctors/${id.value}`)
+    const res = await $fetch<DoctorFull>(`${apiBase}/doctors/${id.value}`)
     doctor.value = res
-  } catch (e) {
+  } catch (e: any) {
     errorDoctor.value = e?.data?.message || e?.message || 'Ошибка загрузки врача'
   } finally {
     loadingDoctor.value = false
   }
 }
 
-// формат даты-дня (ключ "YYYY-MM-DD" c учётом часового пояса)
-function dayKeyFromISO(iso) {
-  // "sv-SE" даёт стабильный формат YYYY-MM-DD
-  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Almaty' })
-}
-
-// формат для бейджей даты (пн, 16.10)
-const kzDate = new Intl.DateTimeFormat('ru-RU', {
-  weekday: 'short',
-  day: '2-digit',
-  month: '2-digit',
-  timeZone: 'Asia/Almaty'
-})
-const kzTime = new Intl.DateTimeFormat('ru-RU', {
-  hour: '2-digit',
-  minute: '2-digit',
-  timeZone: 'Asia/Almaty'
-})
-function fmtDateKey(dateKey /* "YYYY-MM-DD" */) {
-  // безопасно форматируем ключ как локальную дату
-  try { return kzDate.format(new Date(`${dateKey}T00:00:00`)) } catch { return dateKey }
-}
-function fmtTime(iso) {
-  try { return kzTime.format(new Date(iso)) } catch { return '' }
-}
-
-// isWeekend для подписи "(до 14:00)" на сб/вс (если нужно)
-function isWeekendByKey(dateKey) {
-  const d = new Date(`${dateKey}T00:00:00`)
-  const day = d.getDay() // 0=Вс,6=Сб
-  return day === 0 || day === 6
-}
-
-async function fetchSchedule() {
+async function fetchSchedule(): Promise<void> {
   loadingSchedule.value = true
   errorSchedule.value = null
   try {
-    const res = await $fetch(`${apiBase}/doctors/${id.value}/schedule`)
+    const res = await $fetch<ScheduleResponse>(`${apiBase}/doctors/${id.value}/schedule`)
     const slots = Array.isArray(res) ? res : []
 
-    // группируем по дню
-    const map = new Map() // key: "YYYY-MM-DD" -> Slot[]
+    const map = new Map<string, DoctorSlot[]>()
     for (const s of slots) {
       if (!s?.startTime || !s?.endTime) continue
       const key = dayKeyFromISO(s.startTime)
       if (!map.has(key)) map.set(key, [])
-      map.get(key).push(s)
+      map.get(key)!.push(s)
     }
-
-    // сортируем слоты внутри дня
     for (const arr of map.values()) {
-      arr.sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+      arr.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     }
 
-    // собираем week[], показываем только дни с слотами
     week.value = Array.from(map.entries())
-      .map(([date, list]) => ({
-        date, // "YYYY-MM-DD"
+      .map(([date, list]): WeekDay => ({
+        date,
         slots: list,
         isWeekend: isWeekendByKey(date),
       }))
-      .sort((a, b) => a.date.localeCompare(b.date)) // дни по возрастанию
+      .sort((a, b) => a.date.localeCompare(b.date))
 
-    // авто-выбор первого дня
-    if (week.value.length) selectedDate.value = week.value[0].date
-    else selectedDate.value = null
-  } catch (e) {
+    selectedDate.value = week.value.length ? week.value[0].date : null
+  } catch (e: any) {
     errorSchedule.value = e?.data?.message || e?.message || 'Ошибка загрузки расписания'
   } finally {
     loadingSchedule.value = false
   }
 }
 
-
-async function fetchReviews() {
+async function fetchReviews(): Promise<void> {
   reviewsLoading.value = true
   reviewsError.value = null
   try {
-    const res = await $fetch(`${apiBase}/doctors/${id.value}/reviews`, {
-      query: {
-        page: reviewsPage.value,
-        limit: reviewsLimit.value,
-        sortBy: reviewsSortBy.value,    // 'date' | 'rating'
-        sortOrder: reviewsSortOrder.value
+    const res = await $fetch<ReviewsResponseFlat | ReviewsResponsePaged | { items?: Review[]; total?: number }>(
+      `${apiBase}/doctors/${id.value}/reviews`,
+      {
+        query: {
+          page: reviewsPage.value,
+          limit: reviewsLimit.value,
+          sortBy: reviewsSortBy.value,
+          sortOrder: reviewsSortOrder.value
+        }
       }
-    })
-    // ожидаем формат { items, total } либо { reviews, pagination }
-    const items = res?.items ?? res?.reviews ?? []
-    const total = Number(res?.total ?? res?.pagination?.total ?? items.length)
+    )
+
+    const items: Review[] =
+      (res as ReviewsResponseFlat)?.items ??
+      (res as ReviewsResponsePaged)?.reviews ??
+      []
+
+    const total: number = Number(
+      (res as ReviewsResponseFlat)?.total ??
+      (res as ReviewsResponsePaged)?.pagination?.total ??
+      items.length
+    )
+
     reviews.value = items
     reviewsTotal.value = total
-  } catch (e) {
+  } catch (e: any) {
     reviewsError.value = e?.data?.message || e?.message || 'Ошибка загрузки отзывов'
   } finally {
     reviewsLoading.value = false
   }
 }
 
-// реакция на смену ID
+/** ===== Реакция на смену ID ===== */
 watch(id, async () => {
   selectedDate.value = null
   reviewsPage.value = 1
   await Promise.all([fetchDoctor(), fetchSchedule(), fetchReviews()])
 })
 
-// первичная загрузка
+/** ===== Первичная загрузка ===== */
 onMounted(async () => {
   await Promise.all([fetchDoctor(), fetchSchedule(), fetchReviews()])
 })
 
-// при смене настроек отзывов — перезагружаем
+/** ===== Перезагрузка отзывов при смене настроек ===== */
 watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
-  fetchReviews()
+  void fetchReviews()
 })
+
+/** ===== Навигация ===== */
+function goBooking(doctorId: string, slot: DoctorSlot) {
+  navigateTo({
+    path: '/booking',
+    query: { doctorId, slotId: slot.id, start: slot.startTime }
+  })
+}
 </script>
 
 <template>
@@ -183,8 +237,7 @@ watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
       <p v-else-if="errorDoctor" class="text-red-600">Ошибка: {{ errorDoctor }}</p>
 
       <div v-else-if="doctor" class="grid md:grid-cols-[200px_1fr] gap-6">
-        <img :src="doctor.avatar || '/placeholder-avatar.png'" alt="Фото врача"
-          class="w-48 h-48 object-cover rounded-xl" />
+        <img :src="doctor.avatar || '/placeholder-avatar.png'" alt="Фото врача" class="w-48 h-48 object-cover rounded-xl" />
 
         <div class="space-y-3">
           <h1 class="text-2xl font-semibold">{{ doctor.name }}</h1>
@@ -193,11 +246,9 @@ watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
             <span class="px-2 py-1 border rounded">
               {{ doctor.specialtyName || doctor.specialty || 'Специальность не указана' }}
             </span>
-            <span>★ {{ doctor.rating ?? '—' }} <span class="text-gray-500">({{ doctor.reviewCount ?? 0 }}
-                отзывов)</span></span>
+            <span>★ {{ doctor.rating ?? '—' }} <span class="text-gray-500">({{ doctor.reviewCount ?? 0 }} отзывов)</span></span>
             <span v-if="doctor.experience != null">Стаж: <strong>{{ doctor.experience }}</strong> лет</span>
-            <span v-if="doctor.price != null">Цена: <strong>{{ new Intl.NumberFormat('ru-RU').format(doctor.price)
-                }}</strong> ₸</span>
+            <span v-if="doctor.price != null">Цена: <strong>{{ new Intl.NumberFormat('ru-RU').format(doctor.price) }}</strong> ₸</span>
           </div>
 
           <div v-if="doctor.education" class="text-sm">
@@ -235,21 +286,28 @@ watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
         <div v-else class="space-y-4">
           <!-- Дни с доступными слотами -->
           <div class="flex flex-wrap gap-3">
-            <!-- Кнопки дней -->
-            <button v-for="d in week" :key="d.date" class="px-3 py-2 border rounded"
+            <button
+              v-for="d in week"
+              :key="d.date"
+              class="px-3 py-2 border rounded"
               :class="selectedDate === d.date ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'"
-              @click="selectedDate = d.date" :title="d.isWeekend ? 'Выходной (работа до обеда)' : 'Рабочий день'">
+              @click="selectedDate = d.date"
+              :title="d.isWeekend ? 'Выходной (работа до обеда)' : 'Рабочий день'"
+            >
               {{ fmtDateKey(d.date) }}
               <span v-if="d.isWeekend" class="ml-1 text-xs opacity-80">(до 14:00)</span>
             </button>
-
           </div>
 
           <!-- Слоты выбранного дня -->
           <div v-if="selectedDate" class="flex flex-wrap gap-2">
-            <button v-for="s in selectedSlots" :key="s.id" class="text-sm border rounded px-3 py-1 hover:bg-gray-50"
+            <button
+              v-for="s in selectedSlots"
+              :key="s.id"
+              class="text-sm border rounded px-3 py-1 hover:bg-gray-50"
               :title="`${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`"
-              @click="$router.push(`/booking?doctorId=${encodeURIComponent(id)}&slotId=${encodeURIComponent(s.id)}`)">
+              @click="goBooking(id, s)"
+            >
               {{ fmtTime(s.startTime) }}–{{ fmtTime(s.endTime) }}
             </button>
           </div>
@@ -304,13 +362,11 @@ watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
 
           <!-- Пагинация отзывов -->
           <div class="flex items-center justify-center gap-2 pt-2">
-            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage <= 1"
-              @click="reviewsPage--">
+            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage <= 1" @click="reviewsPage--">
               Назад
             </button>
             <span>Стр. {{ reviewsPage }} из {{ reviewsPages }}</span>
-            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage >= reviewsPages"
-              @click="reviewsPage++">
+            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage >= reviewsPages" @click="reviewsPage++">
               Вперёд
             </button>
 
