@@ -1,16 +1,33 @@
 <script setup>
-const auth = useAuthStore()
-const { user } = storeToRefs(auth)
+import { onMounted } from 'vue'
+import { useRequestsStore } from '~/stores/requests'
+
+const store = useRequestsStore()
+const { user, token } = storeToRefs(store)
 
 const router = useRouter()
 const { public: { apiBase } } = useRuntimeConfig()
 
+// при монтировании пробуем получить профиль, если токен есть и user ещё не загружен
+onMounted(async () => {
+  if (token.value && !user.value) {
+    try {
+      await store.getMe()
+      console.log('[AppHeader] user loaded:', user.value)
+    } catch (e) {
+      console.warn('[AppHeader] getMe failed:', e)
+    }
+  }
+})
+
 async function logout() {
   try {
-    // если есть логаут на бэке — дерни его, иначе просто очисти локально
-    await $fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(()=>{})
+    await $fetch(`${apiBase}/auth/logout`, {
+      method: 'POST',
+      headers: store.token ? { Authorization: `Bearer ${store.token}` } : undefined,
+    }).catch(() => {})
   } finally {
-    auth.clearUser()
+    store.clearAuth()
     router.push('/')
   }
 }
