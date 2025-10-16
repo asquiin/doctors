@@ -1,9 +1,15 @@
-<script setup>
-import { onMounted } from 'vue'
-import { useRequestsStore } from '~/stores/requests'
+<script setup lang="ts">
+import { onMounted, type Ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useRequestsStore } from '~/stores/requests' // твой requests.ts
 
+// Стор
 const store = useRequestsStore()
-const { user, token } = storeToRefs(store)
+// Явно подсказываем типы ссылок
+const { user, token } = storeToRefs(store) as {
+  user: Ref<{ name?: string; email?: string; avatar?: string } | null>
+  token: Ref<string | null>
+}
 
 const router = useRouter()
 const { public: { apiBase } } = useRuntimeConfig()
@@ -19,25 +25,25 @@ onMounted(async () => {
   }
 })
 
-async function logout() {
+async function logout(): Promise<void> {
   try {
     await $fetch(`${apiBase}/auth/logout`, {
       method: 'POST',
-      headers: store.token ? { Authorization: `Bearer ${store.token}` } : undefined,
+      headers: token.value ? { Authorization: `Bearer ${token.value}` } : undefined,
     }).catch(() => {})
   } finally {
     store.clearAuth()
-    router.push('/')
+    await router.push('/')
   }
 }
 </script>
 
 <template>
-  <header class="p-4 bg-gray-800 text-white flex justify-between">
-    <NuxtLink to="/">Главная</NuxtLink>
-     <nav class="flex gap-4 items-center">
-  
+  <header class="p-4 bg-gray-800 text-white">
+ 
 
+    <nav class="flex gap-4 items-center justify-between">
+         <NuxtLink to="/">Главная</NuxtLink>
       <!-- Если залогинен — аватарка -->
       <div v-if="user" class="flex items-center gap-3">
         <img :src="user.avatar || '/placeholder-avatar.png'" class="w-8 h-8 rounded-full object-cover" alt="">
@@ -46,11 +52,15 @@ async function logout() {
       </div>
 
       <!-- Если нет — кнопка Войти -->
-      <NuxtLink v-else :to="{ path: '/login', query: { redirect: 'back' } }" class="px-3 py-1 border rounded">
+      <NuxtLink
+        v-else
+        :to="{ path: '/login', query: { redirect: 'back' } }"
+        class="px-3 py-1 border rounded"
+      >
         Войти
       </NuxtLink>
     </nav>
   </header>
 
-      <main class="flex-1"><slot /></main>
+  <main class="flex-1"><slot /></main>
 </template>
