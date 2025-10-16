@@ -43,20 +43,17 @@ export const useRequestsStore = defineStore('requests', () => {
   const error = ref<string | null>(null)
 
   const user = ref<any | null>(null)
-  const token = ref<string | null>(null)
-
-  if (process.client) {
-    token.value = localStorage.getItem('token')
-  }
+  const tokenCookie = useCookie<string | null>('token', {
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 24 * 7, 
+  })
+  const token = computed(() => tokenCookie.value ?? null)
 
   const { public: { apiBase } } = useRuntimeConfig()
 
   function setToken(t?: string | null) {
-    token.value = t || null
-    if (process.client) {
-      if (t) localStorage.setItem('token', t)
-      else localStorage.removeItem('token')
-    }
+    tokenCookie.value = t || null 
   }
   function setUser(u?: any | null) { user.value = u || null }
   function clearAuth() { user.value = null; setToken(null) }
