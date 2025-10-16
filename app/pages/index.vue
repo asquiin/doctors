@@ -23,8 +23,7 @@ const sortOrder = ref<'asc' | 'desc'>('desc')
 
 const { public: { apiBase } } = useRuntimeConfig()
 
-// эндпоинты берём ИЗ СТРАНИЦЫ:
-const DOCTORS_ENDPOINT = ref<string>('/doctors')       // можно заменить на другой, напр. '/v2/doctors'
+const DOCTORS_ENDPOINT = ref<string>('/doctors')      
 const SPECIALTIES_ENDPOINT = ref<string>('/specialties')
 
 onMounted(async () => {
@@ -85,7 +84,6 @@ function fmtSlot(iso?: string) {
   try { return iso ? kzFmt.format(new Date(iso)) : '' } catch { return '' }
 }
 
-// корректный переход по слоту — через navigateTo (без $router)
 const goToDoctorSlot = (docId: string, slot: { id: string; startTime: string }) => {
   navigateTo({ name: 'doctors-id', params: { id: docId }, query: { slotId: slot.id, start: slot.startTime } })
 }
@@ -95,7 +93,6 @@ const goToDoctorSlot = (docId: string, slot: { id: string; startTime: string }) 
   <div class="p-6 space-y-6">
     <h1 class="text-2xl font-semibold">Врачи</h1>
 
-    <!-- Фильтры/Сортировка -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
       <div class="lg:col-span-3">
         <label class="block text-sm font-medium mb-1">Специальность</label>
@@ -145,7 +142,6 @@ const goToDoctorSlot = (docId: string, slot: { id: string; startTime: string }) 
       </div>
     </div>
 
-    <!-- Контент -->
     <div v-if="loading" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
       <div v-for="i in 6" :key="i" class="animate-pulse border rounded p-4 space-y-3">
         <div class="h-44 bg-gray-200 rounded" />
