@@ -1,7 +1,5 @@
-// stores/requests.ts
 import { defineStore } from 'pinia'
 
-/** ===== Типы API ===== */
 export interface Pagination {
   page: number
   limit: number
@@ -37,11 +35,9 @@ export interface DoctorsResponse {
   pagination: Pagination
 }
 
-/** Универсальный ответ, если эндпоинт другой */
 export type AnyResponse = unknown
 
 export const useRequestsStore = defineStore('requests', () => {
-  // --- общий стейт ---
   const data = ref<AnyResponse | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -49,10 +45,8 @@ export const useRequestsStore = defineStore('requests', () => {
   const user = ref<any | null>(null)
   const token = ref<string | null>(null)
 
-  // init token из localStorage
   if (process.client) {
     token.value = localStorage.getItem('token')
-    // console.log('[init] token from LS =', token.value)
   }
 
   const { public: { apiBase } } = useRuntimeConfig()
@@ -78,7 +72,19 @@ export const useRequestsStore = defineStore('requests', () => {
    * @param params   query-параметры
    * @returns ответ как unknown (или кастуешь в странице)
    */
-  const getData = async <T = AnyResponse>(
+
+
+  const postLogin = async (payload: { email: string; password: string }) => {
+    const res = await $fetch<{ success?: boolean; token?: string; user?: any }>(
+      `${apiBase}/auth/login`,
+      { method: 'POST', body: payload }
+    )
+    if (res?.token) setToken(res.token)
+    if (res?.user) setUser(res.user)
+    return res
+  }
+
+ const getData = async <T = AnyResponse>(
     endpoint: string,
     params: Record<string, any> = {}
   ): Promise<T> => {
@@ -101,35 +107,12 @@ export const useRequestsStore = defineStore('requests', () => {
     }
   }
 
-  /** Авторизация */
-  const postLogin = async (payload: { email: string; password: string }) => {
-    const res = await $fetch<{ success?: boolean; token?: string; user?: any }>(
-      `${apiBase}/auth/login`,
-      { method: 'POST', body: payload }
-    )
-    if (res?.token) setToken(res.token)
-    if (res?.user) setUser(res.user)
-    return res
-  }
-
-  /** Профиль */
-  const getMe = async () => {
-    if (!token.value) throw new Error('Нет токена')
-    const res = await $fetch<any>(`${apiBase}/auth/me`, {
-      method: 'GET',
-      headers: bearerAuth(),
-    })
-    setUser(res)
-    return res
-  }
 
   return {
-    // state
     data, loading, error,
     user, token,
-    // auth utils
+
     setToken, setUser, clearAuth,
-    // api
-    getData, postLogin, getMe,
+    getData, postLogin
   }
 })
