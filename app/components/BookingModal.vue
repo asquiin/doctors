@@ -1,8 +1,7 @@
-<!-- components/BookingModal.vue -->
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useRequestsStore } from '~/stores/requests'
+import { useRequestsStore } from '~/stores/requests.ts'
 
 type ISO = string
 
@@ -20,18 +19,17 @@ const emit = defineEmits<{
 const route = useRoute()
 const router = useRouter()
 const store = useRequestsStore()
-const { public: { apiBase } } = useRuntimeConfig()
 
 // если не авторизован — на /login с возвратом на эту же страницу (с текущими query)
 onMounted(async () => {
   if (!store.token) {
     return router.replace({
       path: '/login',
-      query: { redirect: route.fullPath } // вернёт ровно сюда после входа
+      query: { redirect: route.fullPath }
     })
   }
   if (!store.user) {
-    try { await store.getMe() } catch {}
+    try { await store.getData('/auth/me') } catch {}
   }
 })
 
@@ -86,7 +84,7 @@ async function submit() {
 
   try {
     const fd = new FormData()
-
+    // ключи под твой бек:
     fd.append('scheduleSlotId', props.slotId)
     fd.append('complaints', complaints.value.trim())
     if (diseases.value.trim()) fd.append('chronicDiseases', diseases.value.trim())
@@ -94,11 +92,8 @@ async function submit() {
     fd.append('weight', String(weightKg.value))
     if (file.value) fd.append('testResults', file.value)
 
-    await $fetch(`${apiBase}/appointments`, {
-      method: 'POST',
-      body: fd,
-      headers: store.token ? { Authorization: `Bearer ${store.token}` } : undefined,
-    })
+    // <<< вот здесь используем стор >>>
+    await store.postData('/appointments', fd, 'POST')
 
     formOk.value = 'Запись успешно создана'
     setTimeout(() => {
@@ -106,7 +101,7 @@ async function submit() {
       emit('close')
     }, 500)
   } catch (e: any) {
-    formError.value = e?.data?.message || e?.message || 'Не удалось создать запись'
+    formError.value = e?.message || 'Не удалось создать запись'
   } finally {
     submitting.value = false
   }
@@ -114,6 +109,7 @@ async function submit() {
 
 function close() { emit('close') }
 </script>
+
 
 <template>
   <!-- Teleport модалки на body -->

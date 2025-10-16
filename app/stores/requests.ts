@@ -51,7 +51,6 @@ export const useRequestsStore = defineStore('requests', () => {
 
   const { public: { apiBase } } = useRuntimeConfig()
 
-  // --- auth утилиты ---
   function setToken(t?: string | null) {
     token.value = t || null
     if (process.client) {
@@ -65,14 +64,6 @@ export const useRequestsStore = defineStore('requests', () => {
   function bearerAuth(): Record<string, string> {
     return token.value ? { Authorization: `Bearer ${token.value}` } : {}
   }
-
-  /**
-   * Универсальный загрузчик:
-   * @param endpoint относительный путь БЕЗ apiBase, например: '/doctors' или '/specialties'
-   * @param params   query-параметры
-   * @returns ответ как unknown (или кастуешь в странице)
-   */
-
 
   const postLogin = async (payload: { email: string; password: string }) => {
     const res = await $fetch<{ success?: boolean; token?: string; user?: any }>(
@@ -107,12 +98,33 @@ export const useRequestsStore = defineStore('requests', () => {
     }
   }
 
+    const postData = async <T = AnyResponse>(
+    endpoint: string,
+    body?: any,
+    method: 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'POST'
+  ): Promise<T> => {
+    // тут не трогаем loading/data: это «точечный» вызов (например, сабмит формы)
+    try {
+      const headers = bearerAuth()
+      // Не устанавливаем Content-Type для FormData
+      const res = await $fetch<T>(`${apiBase}${endpoint}`, {
+        method,
+        body,
+        headers,
+      })
+      return res
+    } catch (e: any) {
+      const msg = e?.data?.message || e?.message || 'Ошибка запроса'
+      throw new Error(msg)
+    }
+  }
+
 
   return {
     data, loading, error,
     user, token,
 
     setToken, setUser, clearAuth,
-    getData, postLogin
+    getData, postLogin, postData
   }
 })
