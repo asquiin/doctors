@@ -76,32 +76,71 @@ const heightValid = computed(() => typeof heightCm.value === 'number' && heightC
 const weightValid = computed(() => typeof weightKg.value === 'number' && weightKg.value >= 20 && weightKg.value <= 300)
 const canSubmit = computed(() => !!store.token && complaintsValid.value && heightValid.value && weightValid.value && !submitting.value)
 
+async function fileToBase64(f: File): Promise<string> {
+  const buf = await f.arrayBuffer()
+  // base64
+  let binary = ''
+  const bytes = new Uint8Array(buf)
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk) as unknown as number[])
+  }
+  return btoa(binary)
+}
+
 async function submit() {
   if (!canSubmit.value) return
   submitting.value = true
   formError.value = null
   formOk.value = null
 
-  try {
-    const fd = new FormData()
-    // ключи под твой бек:
-    fd.append('scheduleSlotId', props.slotId)
-    fd.append('complaints', complaints.value.trim())
-    if (diseases.value.trim()) fd.append('chronicDiseases', diseases.value.trim())
-    fd.append('height', String(heightCm.value))
-    fd.append('weight', String(weightKg.value))
-    if (file.value) fd.append('testResults', file.value)
+  // общие поля
+  const baseFields = {
+    scheduleSlotId: props.slotId,
+    complaints: complaints.value.trim(),
+    chronicDiseases: diseases.value.trim() || undefined,
+    height: heightCm.value!,
+    weight: weightKg.value!,
+  }
 
-    // <<< вот здесь используем стор >>>
+  try {
+    // === Попытка №1: multipart/form-data ===
+    const fd = new FormData()
+    fd.append('scheduleSlotId', baseFields.scheduleSlotId)
+    fd.append('complaints', baseFields.complaints)
+    if (baseFields.chronicDiseases) fd.append('chronicDiseases', baseFields.chronicDiseases)
+    fd.append('height', String(baseFields.height))
+    fd.append('weight', String(baseFields.weight))
+    if (file.value) {
+      // Ключ именно "file" — как ожидает большинство Swagger-схем (string($binary))
+      fd.append('file', file.value, file.value.name)
+    }
+
     await store.postData('/appointments', fd, 'POST')
 
     formOk.value = 'Запись успешно создана'
-    setTimeout(() => {
-      emit('success')
-      emit('close')
-    }, 500)
-  } catch (e: any) {
-    formError.value = e?.message || 'Не удалось создать запись'
+    setTimeout(() => { emit('success'); emit('close') }, 500)
+  } catch (err: any) {
+    // === Фолбэк: JSON + base64 ===
+    try {
+      if (!file.value) throw err // без файла повторять смысла нет
+
+      const b64 = await fileToBase64(file.value)
+      // чаще всего поле называется тоже "file", но если у тебя в бэке другое — замени здесь
+      const jsonBody: Record<string, any> = {
+        ...baseFields,
+        file: b64,
+        fileName: file.value.name,
+        fileType: file.value.type || 'application/octet-stream',
+      }
+
+      await store.postData('/appointments', jsonBody, 'POST') // $fetch сам поставит application/json
+
+      formOk.value = 'Запись успешно создана'
+      setTimeout(() => { emit('success'); emit('close') }, 500)
+    } catch (e2: any) {
+      formError.value = e2?.message || err?.message || 'Не удалось создать запись'
+    }
   } finally {
     submitting.value = false
   }
