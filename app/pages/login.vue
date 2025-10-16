@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'default' })
+definePageMeta({ layout: 'default' }) // без .vue
 
 const router = useRouter()
 const email = ref('')
@@ -9,27 +9,19 @@ const formError = ref<string | null>(null)
 const submitting = ref(false)
 
 const emailValid = computed(() => /\S+@\S+\.\S+/.test(email.value))
-const passValid = computed(() => password.value.length >= 6)
-const canSubmit = computed(() => emailValid.value && passValid.value && !submitting.value)
+const passValid  = computed(() => password.value.length >= 6)
+const canSubmit  = computed(() => emailValid.value && passValid.value && !submitting.value)
 
-const requests = useRequestsStore()
+const req = useRequestsStore()
 
 async function onSubmit() {
   if (!canSubmit.value) return
   submitting.value = true
   formError.value = null
-
   try {
-    // 🔹 вызываем централизованный экшен
-    await requests.postLogin({
-      email: email.value,
-      password: password.value,
-    })
-
-
-    // const me = await requests.getMe()
-    // console.log('User:', me)
-
+    const res = await req.postLogin({ email: email.value, password: password.value })
+    // если user не пришёл в ответе — дотянем
+    if (!req.user && req.token) await req.getMe()
     await router.replace('/')
   } catch (e: any) {
     formError.value = e?.data?.message || e?.message || 'Не удалось авторизоваться'
@@ -38,7 +30,6 @@ async function onSubmit() {
   }
 }
 </script>
-
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-gray-50 p-6">
