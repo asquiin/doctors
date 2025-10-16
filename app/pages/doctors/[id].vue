@@ -34,15 +34,7 @@ const reviewsSortOrder = ref('desc')  // 'asc' | 'desc'
 const reviewsTotal = ref(0)
 const reviewsPages = computed(() => Math.max(1, Math.ceil(reviewsTotal.value / reviewsLimit.value)))
 
-// форматтеры
-const kzDate = new Intl.DateTimeFormat('ru-RU', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Asia/Almaty' })
-const kzTime = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Almaty' })
-function fmtDate(iso) {
-  try { return kzDate.format(new Date(iso)) } catch { return '' }
-}
-function fmtTime(iso) {
-  try { return kzTime.format(new Date(iso)) } catch { return '' }
-}
+
 
 // ====== Загрузчики ======
 async function fetchDoctor() {
@@ -58,32 +50,79 @@ async function fetchDoctor() {
   }
 }
 
+// формат даты-дня (ключ "YYYY-MM-DD" c учётом часового пояса)
+function dayKeyFromISO(iso) {
+  // "sv-SE" даёт стабильный формат YYYY-MM-DD
+  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Almaty' })
+}
+
+// формат для бейджей даты (пн, 16.10)
+const kzDate = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'short',
+  day: '2-digit',
+  month: '2-digit',
+  timeZone: 'Asia/Almaty'
+})
+const kzTime = new Intl.DateTimeFormat('ru-RU', {
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'Asia/Almaty'
+})
+function fmtDateKey(dateKey /* "YYYY-MM-DD" */) {
+  // безопасно форматируем ключ как локальную дату
+  try { return kzDate.format(new Date(`${dateKey}T00:00:00`)) } catch { return dateKey }
+}
+function fmtTime(iso) {
+  try { return kzTime.format(new Date(iso)) } catch { return '' }
+}
+
+// isWeekend для подписи "(до 14:00)" на сб/вс (если нужно)
+function isWeekendByKey(dateKey) {
+  const d = new Date(`${dateKey}T00:00:00`)
+  const day = d.getDay() // 0=Вс,6=Сб
+  return day === 0 || day === 6
+}
+
 async function fetchSchedule() {
   loadingSchedule.value = true
   errorSchedule.value = null
   try {
     const res = await $fetch(`${apiBase}/doctors/${id.value}/schedule`)
-    // ожидаем что придёт { days: [...] } или просто массив; приводим к единому виду
-    const days = Array.isArray(res?.days) ? res.days : Array.isArray(res) ? res : []
-    // показываем только дни с доступными слотами
-    week.value = days
-      .map(d => ({
-        date: d.date,                               // ISO дня (например "2025-10-16")
-        slots: (d.slots || []).filter(s => s?.startTime && s?.endTime),
-        isWeekend: !!d.isWeekend
-      }))
-      .filter(d => d.slots.length > 0)
+    const slots = Array.isArray(res) ? res : []
 
-    // автоселект первого доступного дня
-    if (week.value.length && !selectedDate.value) {
-      selectedDate.value = week.value[0].date
+    // группируем по дню
+    const map = new Map() // key: "YYYY-MM-DD" -> Slot[]
+    for (const s of slots) {
+      if (!s?.startTime || !s?.endTime) continue
+      const key = dayKeyFromISO(s.startTime)
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(s)
     }
+
+    // сортируем слоты внутри дня
+    for (const arr of map.values()) {
+      arr.sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+    }
+
+    // собираем week[], показываем только дни с слотами
+    week.value = Array.from(map.entries())
+      .map(([date, list]) => ({
+        date, // "YYYY-MM-DD"
+        slots: list,
+        isWeekend: isWeekendByKey(date),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)) // дни по возрастанию
+
+    // авто-выбор первого дня
+    if (week.value.length) selectedDate.value = week.value[0].date
+    else selectedDate.value = null
   } catch (e) {
     errorSchedule.value = e?.data?.message || e?.message || 'Ошибка загрузки расписания'
   } finally {
     loadingSchedule.value = false
   }
 }
+
 
 async function fetchReviews() {
   reviewsLoading.value = true
@@ -144,11 +183,8 @@ watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
       <p v-else-if="errorDoctor" class="text-red-600">Ошибка: {{ errorDoctor }}</p>
 
       <div v-else-if="doctor" class="grid md:grid-cols-[200px_1fr] gap-6">
-        <img
-          :src="doctor.avatar || '/placeholder-avatar.png'"
-          alt="Фото врача"
-          class="w-48 h-48 object-cover rounded-xl"
-        />
+        <img :src="doctor.avatar || '/placeholder-avatar.png'" alt="Фото врача"
+          class="w-48 h-48 object-cover rounded-xl" />
 
         <div class="space-y-3">
           <h1 class="text-2xl font-semibold">{{ doctor.name }}</h1>
@@ -157,9 +193,11 @@ watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
             <span class="px-2 py-1 border rounded">
               {{ doctor.specialtyName || doctor.specialty || 'Специальность не указана' }}
             </span>
-            <span>★ {{ doctor.rating ?? '—' }} <span class="text-gray-500">({{ doctor.reviewCount ?? 0 }} отзывов)</span></span>
+            <span>★ {{ doctor.rating ?? '—' }} <span class="text-gray-500">({{ doctor.reviewCount ?? 0 }}
+                отзывов)</span></span>
             <span v-if="doctor.experience != null">Стаж: <strong>{{ doctor.experience }}</strong> лет</span>
-            <span v-if="doctor.price != null">Цена: <strong>{{ new Intl.NumberFormat('ru-RU').format(doctor.price) }}</strong> ₸</span>
+            <span v-if="doctor.price != null">Цена: <strong>{{ new Intl.NumberFormat('ru-RU').format(doctor.price)
+                }}</strong> ₸</span>
           </div>
 
           <div v-if="doctor.education" class="text-sm">
@@ -197,28 +235,21 @@ watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
         <div v-else class="space-y-4">
           <!-- Дни с доступными слотами -->
           <div class="flex flex-wrap gap-3">
-            <button
-              v-for="d in week"
-              :key="d.date"
-              class="px-3 py-2 border rounded"
+            <!-- Кнопки дней -->
+            <button v-for="d in week" :key="d.date" class="px-3 py-2 border rounded"
               :class="selectedDate === d.date ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'"
-              @click="selectedDate = d.date"
-              :title="d.isWeekend ? 'Выходной (работа до обеда)' : 'Рабочий день'"
-            >
-              {{ fmtDate(d.date) }}
+              @click="selectedDate = d.date" :title="d.isWeekend ? 'Выходной (работа до обеда)' : 'Рабочий день'">
+              {{ fmtDateKey(d.date) }}
               <span v-if="d.isWeekend" class="ml-1 text-xs opacity-80">(до 14:00)</span>
             </button>
+
           </div>
 
           <!-- Слоты выбранного дня -->
           <div v-if="selectedDate" class="flex flex-wrap gap-2">
-            <button
-              v-for="s in selectedSlots"
-              :key="s.id"
-              class="text-sm border rounded px-3 py-1 hover:bg-gray-50"
+            <button v-for="s in selectedSlots" :key="s.id" class="text-sm border rounded px-3 py-1 hover:bg-gray-50"
               :title="`${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`"
-              @click="$router.push(`/booking?doctorId=${encodeURIComponent(id)}&slotId=${encodeURIComponent(s.id)}`)"
-            >
+              @click="$router.push(`/booking?doctorId=${encodeURIComponent(id)}&slotId=${encodeURIComponent(s.id)}`)">
               {{ fmtTime(s.startTime) }}–{{ fmtTime(s.endTime) }}
             </button>
           </div>
@@ -273,11 +304,13 @@ watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
 
           <!-- Пагинация отзывов -->
           <div class="flex items-center justify-center gap-2 pt-2">
-            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage <= 1" @click="reviewsPage--">
+            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage <= 1"
+              @click="reviewsPage--">
               Назад
             </button>
             <span>Стр. {{ reviewsPage }} из {{ reviewsPages }}</span>
-            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage >= reviewsPages" @click="reviewsPage++">
+            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage >= reviewsPages"
+              @click="reviewsPage++">
               Вперёд
             </button>
 
