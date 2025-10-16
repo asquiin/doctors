@@ -98,15 +98,13 @@ export const useRequestsStore = defineStore('requests', () => {
     }
   }
 
-    const postData = async <T = AnyResponse>(
+ const postData = async <T = AnyResponse>(
     endpoint: string,
     body?: any,
     method: 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'POST'
   ): Promise<T> => {
-    // тут не трогаем loading/data: это «точечный» вызов (например, сабмит формы)
     try {
       const headers = bearerAuth()
-      // Не устанавливаем Content-Type для FormData
       const res = await $fetch<T>(`${apiBase}${endpoint}`, {
         method,
         body,
