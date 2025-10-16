@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Success from '~/components/SuccessModal.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRequestsStore } from '~/stores/requests.ts'
@@ -19,6 +20,7 @@ const emit = defineEmits<{
 const route = useRoute()
 const router = useRouter()
 const store = useRequestsStore()
+const showToast = ref(false)
 
 onMounted(async () => {
   if (!store.token) {
@@ -114,6 +116,8 @@ async function submit() {
 
     formOk.value = 'Запись успешно создана'
     setTimeout(() => { emit('success'); emit('close') }, 500)
+
+    alert('Успено записались на прием!')
   } catch (err: any) {
     try {
       if (!file.value) throw err 
@@ -130,7 +134,7 @@ async function submit() {
 
       formOk.value = 'Запись успешно создана'
 
-      alert("Запись успешно создана!")
+      showToast.value = true
       setTimeout(() => { emit('success'); emit('close') }, 500)
     } catch (e2: any) {
       formError.value = e2?.message || err?.message || 'Не удалось создать запись'
@@ -145,6 +149,8 @@ function close() { emit('close') }
 
 
 <template>
+  <SuccessModal v-if="showToast" message="Запись успешно создана!" />
+
   <Teleport to="body">
     <div class="fixed inset-0 z-50">
       <div class="absolute inset-0 bg-black/40" @click="close" />
