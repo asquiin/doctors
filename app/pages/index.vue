@@ -207,7 +207,7 @@ function fmtSlot(iso) {
           </div>
 
           <div class="p-4 pt-0">
-            <NuxtLink :to="`/doctors/${doc.id}`" class="inline-block w-full text-center bg-gray-900 text-white px-4 py-2 rounded hover:opacity-90">
+            <NuxtLink :to="{ name: 'doctors-id', params: { id: doc.id } }" class="inline-block w-full text-center bg-gray-900 text-white px-4 py-2 rounded hover:opacity-90">
               Подробнее
             </NuxtLink>
           </div>
