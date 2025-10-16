@@ -1,9 +1,7 @@
-<!-- pages/doctors/[id].vue -->
 <script setup lang="ts">
 import BookingModal from '~/components/BookingModal.vue'
 import { useRoute, useRouter } from 'vue-router'
 
-/** ===== Типы API ===== */
 type ISO = string
 
 export interface DoctorSlot {
@@ -46,17 +44,14 @@ export interface ReviewsResponsePaged {
   pagination: { total: number }
 }
 
-/** Расписание от твоего API — плоский массив слотов */
 export type ScheduleResponse = DoctorSlot[]
 
-/** Структура, с которой удобно работать в UI */
 export interface WeekDay {
-  date: string;                 // 'YYYY-MM-DD'
+  date: string;                
   slots: DoctorSlot[];
   isWeekend: boolean;
 }
 
-/** ===== Параметры роутинга/конфиг ===== */
 const route = useRoute()
 const router = useRouter()
 const showModal = computed(() => !!route.query.slotId)
@@ -64,12 +59,10 @@ const id = computed<string>(() => route.params.id as string)
 
 const { public: { apiBase } } = useRuntimeConfig()
 
-/** ===== Состояние врача ===== */
 const doctor = ref<DoctorFull | null>(null)
 const loadingDoctor = ref<boolean>(false)
 const errorDoctor = ref<string | null>(null)
 
-/** ===== Состояние расписания ===== */
 const week = ref<WeekDay[]>([])
 const loadingSchedule = ref<boolean>(false)
 const errorSchedule = ref<string | null>(null)
@@ -80,7 +73,6 @@ const selectedSlots = computed<DoctorSlot[]>(() => {
   return day?.slots ?? []
 })
 
-/** ===== Состояние отзывов ===== */
 const reviews = ref<Review[]>([])
 const reviewsLoading = ref<boolean>(false)
 const reviewsError = ref<string | null>(null)
@@ -91,9 +83,8 @@ const reviewsSortOrder = ref<'asc' | 'desc'>('desc')
 const reviewsTotal = ref<number>(0)
 const reviewsPages = computed<number>(() => Math.max(1, Math.ceil(reviewsTotal.value / reviewsLimit.value)))
 
-/** ===== Форматтеры ===== */
 function dayKeyFromISO(iso: ISO): string {
-  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Almaty' }) // YYYY-MM-DD
+  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Almaty' }) 
 }
 const kzDate = new Intl.DateTimeFormat('ru-RU', {
   weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Asia/Almaty'
@@ -109,12 +100,11 @@ function fmtTime(iso: ISO): string {
 }
 function isWeekendByKey(dateKey: string): boolean {
   const d = new Date(`${dateKey}T00:00:00`)
-  const day = d.getDay() // 0=Вс,6=Сб
+  const day = d.getDay() 
   return day === 0 || day === 6
 }
 
 
-/** ===== Загрузчики ===== */
 async function fetchDoctor(): Promise<void> {
   loadingDoctor.value = true
   errorDoctor.value = null
@@ -198,24 +188,20 @@ async function fetchReviews(): Promise<void> {
   }
 }
 
-/** ===== Реакция на смену ID ===== */
 watch(id, async () => {
   selectedDate.value = null
   reviewsPage.value = 1
   await Promise.all([fetchDoctor(), fetchSchedule(), fetchReviews()])
 })
 
-/** ===== Первичная загрузка ===== */
 onMounted(async () => {
   await Promise.all([fetchDoctor(), fetchSchedule(), fetchReviews()])
 })
 
-/** ===== Перезагрузка отзывов при смене настроек ===== */
 watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
   void fetchReviews()
 })
 
-/** ===== Навигация ===== */
 function openBooking(slot: DoctorSlot) {
   router.push({
     name: 'doctors-id',
@@ -228,7 +214,6 @@ function closeModal() {
   const q = { ...route.query }
   delete q.slotId
   delete q.start
-  // doctorId можно оставить — но лучше убрать, чтобы ЧПУ было чистым
   delete q.doctorId
   router.replace({ name: 'doctors-id', params: { id: id.value }, query: q })
 }
@@ -236,7 +221,6 @@ function closeModal() {
 
 <template>
   <div class="p-6 space-y-8">
-    <!-- Инфо о враче -->
     <section>
       <div v-if="loadingDoctor" class="animate-pulse grid md:grid-cols-[200px_1fr] gap-6">
         <div class="w-48 h-48 bg-gray-200 rounded-xl" />
@@ -286,7 +270,6 @@ function closeModal() {
       </div>
     </section>
 
-    <!-- Расписание на неделю -->
     <section>
       <h2 class="text-xl font-semibold mb-3">Расписание на неделю</h2>
 
@@ -301,7 +284,6 @@ function closeModal() {
         </div>
 
         <div v-else class="space-y-4">
-          <!-- Дни с доступными слотами -->
           <button v-for="d in week" :key="d.date" class="px-3 py-2 border rounded"
             :class="selectedDate === d.date ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'"
             @click="selectedDate = d.date" :title="d.isWeekend ? 'Выходной (работа до обеда)' : 'Рабочий день'">
@@ -309,7 +291,6 @@ function closeModal() {
             <span v-if="d.isWeekend" class="ml-1 text-xs opacity-80">(до 14:00)</span>
           </button>
 
-          <!-- Слоты выбранного дня: открываем модалку -->
           <div v-if="selectedDate" class="flex flex-wrap gap-2">
             <button v-for="s in selectedSlots" :key="s.id" class="text-sm border rounded px-3 py-1 hover:bg-gray-50"
               :title="`${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`" @click="openBooking(s)">
@@ -317,14 +298,12 @@ function closeModal() {
             </button>
           </div>
 
-          <!-- Модалка (по query.slotId) -->
           <BookingModal v-if="showModal" :doctor-id="id" :slot-id="String(route.query.slotId || '')"
             :start="String(route.query.start || '')" @close="closeModal" @success="" />
         </div>
       </div>
     </section>
 
-    <!-- Отзывы -->
     <section>
       <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
         <h2 class="text-xl font-semibold">Отзывы</h2>
@@ -369,7 +348,6 @@ function closeModal() {
             </p>
           </article>
 
-          <!-- Пагинация отзывов -->
           <div class="flex items-center justify-center gap-2 pt-2">
             <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage <= 1"
               @click="reviewsPage--">
