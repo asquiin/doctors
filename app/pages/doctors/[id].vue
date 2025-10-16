@@ -110,6 +110,14 @@ function isWeekendByKey(dateKey: string): boolean {
   return day === 0 || day === 6
 }
 
+function openBooking(slot: DoctorSlot) {
+  navigateTo({
+    path: '/booking',
+    query: { doctorId: id.value, slotId: slot.id, start: slot.startTime }
+  })
+}
+
+
 /** ===== Загрузчики ===== */
 async function fetchDoctor(): Promise<void> {
   loadingDoctor.value = true
@@ -290,8 +298,9 @@ function goBooking(doctorId: string, slot: DoctorSlot) {
               v-for="d in week"
               :key="d.date"
               class="px-3 py-2 border rounded"
+                @click="openBooking(s)"
               :class="selectedDate === d.date ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'"
-              @click="selectedDate = d.date"
+            
               :title="d.isWeekend ? 'Выходной (работа до обеда)' : 'Рабочий день'"
             >
               {{ fmtDateKey(d.date) }}
