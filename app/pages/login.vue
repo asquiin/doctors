@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'default' }) // без .vue
+definePageMeta({ layout: 'default' })
 
 const router = useRouter()
 const email = ref('')
@@ -20,8 +20,6 @@ async function onSubmit() {
   formError.value = null
   try {
     const res = await req.postLogin({ email: email.value, password: password.value })
-    // если user не пришёл в ответе — дотянем
-    if (!req.user && req.token) await req.getMe()
     await router.replace('/')
   } catch (e: any) {
     formError.value = e?.data?.message || e?.message || 'Не удалось авторизоваться'
@@ -37,7 +35,6 @@ async function onSubmit() {
       <h1 class="text-2xl font-semibold text-center">Вход</h1>
 
       <form @submit.prevent="onSubmit" class="space-y-4">
-        <!-- Email -->
         <div>
           <label class="block text-sm mb-1">Email</label>
           <input
@@ -51,7 +48,6 @@ async function onSubmit() {
           </p>
         </div>
 
-        <!-- Пароль -->
         <div>
           <label class="block text-sm mb-1">Пароль</label>
           <div class="flex">
@@ -71,10 +67,8 @@ async function onSubmit() {
           </p>
         </div>
 
-        <!-- Ошибка формы -->
         <p v-if="formError" class="text-sm text-red-600">{{ formError }}</p>
 
-        <!-- Submit -->
         <button
           type="submit"
           class="w-full bg-gray-900 text-white rounded px-4 py-2 disabled:opacity-60"
