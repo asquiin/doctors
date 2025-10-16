@@ -1,26 +1,35 @@
 <!-- pages/doctors.vue -->
-<script setup>
+<script setup lang="ts">
+import type { DoctorsResponse } from '~/stores/requests'
+
 const requests = useRequestsStore()
 const { data, loading, error } = storeToRefs(requests)
 
-const page = ref(1)
-const limit = ref(6)
+const page = ref<number>(1)
+const limit = ref<number>(6)
 
-const specialties = ref([{ id: '', name: 'Все специальности' }])
-const specialtyMap = computed(() => Object.fromEntries(specialties.value.filter(s=>s.id).map(s => [s.id, s.name])))
-const selectedSpecialty = ref('')
+type Specialty = { id: string; name: string }
+const specialties = ref<Specialty[]>([{ id: '', name: 'Все специальности' }])
+const specialtyMap = computed<Record<string, string>>(
+  () => Object.fromEntries(specialties.value.filter(s => s.id).map(s => [s.id, s.name]))
+)
+const selectedSpecialty = ref<string>('')
 
-const minRating = ref(0)
-const searchName = ref('')
+const minRating = ref<number>(0)
+const searchName = ref<string>('')
 
-const sortBy = ref('rating') 
-const sortOrder = ref('desc') 
+const sortBy = ref<'rating' | 'experience' | 'price' | 'name'>('rating')
+const sortOrder = ref<'asc' | 'desc'>('desc')
 
 const { public: { apiBase } } = useRuntimeConfig()
 
+// эндпоинты берём ИЗ СТРАНИЦЫ:
+const DOCTORS_ENDPOINT = ref<string>('/doctors')       // можно заменить на другой, напр. '/v2/doctors'
+const SPECIALTIES_ENDPOINT = ref<string>('/specialties')
+
 onMounted(async () => {
   try {
-    const res = await $fetch(`${apiBase}/specialties`)
+    const res = await $fetch<Specialty[]>(`${apiBase}${SPECIALTIES_ENDPOINT.value}`)
     if (Array.isArray(res)) {
       specialties.value = [{ id: '', name: 'Все специальности' }, ...res]
     }
@@ -29,11 +38,11 @@ onMounted(async () => {
   }
 })
 
-let t = null
+let t: ReturnType<typeof setTimeout> | null = null
 function scheduleFetch() {
   if (t) clearTimeout(t)
-  t = setTimeout(() => {
-    void requests.getData({
+  t = setTimeout(async () => {
+    await requests.getData<DoctorsResponse>(DOCTORS_ENDPOINT.value, {
       page: page.value,
       limit: limit.value,
       sortBy: sortBy.value,
@@ -48,8 +57,12 @@ function scheduleFetch() {
 onMounted(scheduleFetch)
 watch([page, limit, sortBy, sortOrder, selectedSpecialty, minRating, searchName], scheduleFetch)
 
-const items = computed(() => data.value?.doctors ?? [])
-const pg = computed(() => data.value?.pagination ?? { page: 1, limit: limit.value, total: 0, pages: 1, hasNext: false, hasPrev: false })
+const items = computed(() => (data.value as DoctorsResponse | null)?.doctors ?? [])
+const pg = computed(() =>
+  (data.value as DoctorsResponse | null)?.pagination ?? {
+    page: 1, limit: limit.value, total: 0, pages: 1, hasNext: false, hasPrev: false
+  }
+)
 const totalPages = computed(() => Number(pg.value.pages || 1))
 
 function resetFilters() {
@@ -67,12 +80,14 @@ function toggleSortOrder() {
 
 watch([sortBy, sortOrder, selectedSpecialty, minRating, searchName], () => { page.value = 1 })
 
-const kzFmt = new Intl.DateTimeFormat('ru-RU', {
-  hour: '2-digit', minute: '2-digit',
-  timeZone: 'Asia/Almaty'
-})
-function fmtSlot(iso) {
-  try { return kzFmt.format(new Date(iso)) } catch { return '' }
+const kzFmt = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Almaty' })
+function fmtSlot(iso?: string) {
+  try { return iso ? kzFmt.format(new Date(iso)) : '' } catch { return '' }
+}
+
+// корректный переход по слоту — через navigateTo (без $router)
+const goToDoctorSlot = (docId: string, slot: { id: string; startTime: string }) => {
+  navigateTo({ name: 'doctors-id', params: { id: docId }, query: { slotId: slot.id, start: slot.startTime } })
 }
 </script>
 
@@ -80,9 +95,8 @@ function fmtSlot(iso) {
   <div class="p-6 space-y-6">
     <h1 class="text-2xl font-semibold">Врачи</h1>
 
- 
+    <!-- Фильтры/Сортировка -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
-
       <div class="lg:col-span-3">
         <label class="block text-sm font-medium mb-1">Специальность</label>
         <select v-model="selectedSpecialty" class="w-full border rounded px-3 py-2">
@@ -90,24 +104,18 @@ function fmtSlot(iso) {
         </select>
       </div>
 
-
       <div class="lg:col-span-3">
-        <label class="block text-sm font-medium mb-1">
-          Минимальный рейтинг: <strong>{{ minRating }}</strong>
-        </label>
+        <label class="block text-sm font-medium mb-1">Минимальный рейтинг: <strong>{{ minRating }}</strong></label>
         <input type="range" min="0" max="5" step="0.5" v-model.number="minRating" class="w-full" />
       </div>
-
 
       <div class="lg:col-span-3">
         <label class="block text-sm font-medium mb-1">Поиск по ФИО</label>
         <div class="flex gap-2">
-          <input v-model.trim="searchName" type="text" placeholder="Например: Волков"
-                 class="flex-1 border rounded px-3 py-2" />
+          <input v-model.trim="searchName" type="text" placeholder="Например: Волков" class="flex-1 border rounded px-3 py-2" />
           <button v-if="searchName" @click="searchName = ''" class="border rounded px-3 py-2" title="Очистить">✕</button>
         </div>
       </div>
-
 
       <div class="lg:col-span-3">
         <label class="block text-sm font-medium mb-1">Сортировка</label>
@@ -118,8 +126,7 @@ function fmtSlot(iso) {
             <option value="price">По цене</option>
             <option value="name">По имени (A–Z)</option>
           </select>
-          <button @click="toggleSortOrder" class="border rounded px-3 py-2 min-w-24"
-                  :title="sortOrder === 'asc' ? 'По возрастанию' : 'По убыванию'">
+          <button @click="toggleSortOrder" class="border rounded px-3 py-2 min-w-24" :title="sortOrder === 'asc' ? 'По возрастанию' : 'По убыванию'">
             {{ sortOrder === 'asc' ? '↑' : '↓' }}
           </button>
         </div>
@@ -138,7 +145,7 @@ function fmtSlot(iso) {
       </div>
     </div>
 
-
+    <!-- Контент -->
     <div v-if="loading" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
       <div v-for="i in 6" :key="i" class="animate-pulse border rounded p-4 space-y-3">
         <div class="h-44 bg-gray-200 rounded" />
@@ -155,7 +162,9 @@ function fmtSlot(iso) {
 
       <div v-else class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <article v-for="doc in items" :key="doc.id" class="border rounded-lg overflow-hidden flex flex-col">
-   <div class="flex justify-center align-center">   <img :src="doc.avatar || '/placeholder-avatar.png'" alt="Фото врача" class="w-50 h-44 object-cover" /> </div>     
+          <div class="flex justify-center items-center">
+            <img :src="doc.avatar || '/placeholder-avatar.png'" alt="Фото врача" class="w-50 h-44 object-cover" />
+          </div>
 
           <div class="p-4 space-y-2 flex-1">
             <h3 class="text-lg font-semibold">{{ doc.name }}</h3>
@@ -181,9 +190,7 @@ function fmtSlot(iso) {
               <span class="font-medium">Достижения:</span>
               <ul class="list-disc list-inside text-gray-700">
                 <li v-for="(a, i) in doc.achievements.slice(0, 3)" :key="i">{{ a }}</li>
-                <li v-if="doc.achievements.length > 3" class="text-gray-500">
-                  + ещё {{ doc.achievements.length - 3 }}
-                </li>
+                <li v-if="doc.achievements.length > 3" class="text-gray-500">+ ещё {{ doc.achievements.length - 3 }}</li>
               </ul>
             </div>
 
@@ -194,7 +201,7 @@ function fmtSlot(iso) {
                   v-for="slot in doc.todaySlots.slice(0, 4)"
                   :key="slot.id"
                   class="text-sm border rounded px-2 py-1 hover:bg-gray-50"
-                  @click="$router.push(`/doctors/${doc.id}?slotId=${slot.id}&start=${encodeURIComponent(slot.startTime)}`)"
+                  @click="goToDoctorSlot(doc.id, slot)"
                   :title="`Записаться на ${fmtSlot(slot.startTime)}–${fmtSlot(slot.endTime)}`"
                 >
                   {{ fmtSlot(slot.startTime) }}–{{ fmtSlot(slot.endTime) }}
@@ -214,15 +221,10 @@ function fmtSlot(iso) {
         </article>
       </div>
 
-
       <div class="mt-6 flex items-center justify-center gap-2">
-        <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="!pg.hasPrev" @click="page--">
-          Назад
-        </button>
+        <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="!pg.hasPrev" @click="page--">Назад</button>
         <span class="px-3 py-2">Стр. {{ page }} из {{ totalPages }}</span>
-        <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="!pg.hasNext" @click="page++">
-          Вперёд
-        </button>
+        <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="!pg.hasNext" @click="page++">Вперёд</button>
       </div>
     </div>
   </div>
