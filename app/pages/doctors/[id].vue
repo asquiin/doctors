@@ -1,6 +1,7 @@
 <!-- pages/doctors/[id].vue -->
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
+import BookingModal from '~/components/BookingModal.vue'
+import { useRoute, useRouter } from 'vue-router'
 
 /** ===== Типы API ===== */
 type ISO = string
@@ -57,6 +58,8 @@ export interface WeekDay {
 
 /** ===== Параметры роутинга/конфиг ===== */
 const route = useRoute()
+const router = useRouter()
+const showModal = computed(() => !!route.query.slotId)
 const id = computed<string>(() => route.params.id as string)
 
 const { public: { apiBase } } = useRuntimeConfig()
@@ -108,13 +111,6 @@ function isWeekendByKey(dateKey: string): boolean {
   const d = new Date(`${dateKey}T00:00:00`)
   const day = d.getDay() // 0=Вс,6=Сб
   return day === 0 || day === 6
-}
-
-function openBooking(slot: DoctorSlot) {
-  navigateTo({
-    path: '/booking',
-    query: { doctorId: id.value, slotId: slot.id, start: slot.startTime }
-  })
 }
 
 
@@ -220,11 +216,21 @@ watch([reviewsPage, reviewsLimit, reviewsSortBy, reviewsSortOrder], () => {
 })
 
 /** ===== Навигация ===== */
-function goBooking(doctorId: string, slot: DoctorSlot) {
-  navigateTo({
-    path: '/booking',
-    query: { doctorId, slotId: slot.id, start: slot.startTime }
+function openBooking(slot: DoctorSlot) {
+  router.push({
+    name: 'doctors-id',
+    params: { id: id.value },
+    query: { ...route.query, doctorId: id.value, slotId: slot.id, start: slot.startTime }
   })
+}
+
+function closeModal() {
+  const q = { ...route.query }
+  delete q.slotId
+  delete q.start
+  // doctorId можно оставить — но лучше убрать, чтобы ЧПУ было чистым
+  delete q.doctorId
+  router.replace({ name: 'doctors-id', params: { id: id.value }, query: q })
 }
 </script>
 
@@ -245,7 +251,8 @@ function goBooking(doctorId: string, slot: DoctorSlot) {
       <p v-else-if="errorDoctor" class="text-red-600">Ошибка: {{ errorDoctor }}</p>
 
       <div v-else-if="doctor" class="grid md:grid-cols-[200px_1fr] gap-6">
-        <img :src="doctor.avatar || '/placeholder-avatar.png'" alt="Фото врача" class="w-48 h-48 object-cover rounded-xl" />
+        <img :src="doctor.avatar || '/placeholder-avatar.png'" alt="Фото врача"
+          class="w-48 h-48 object-cover rounded-xl" />
 
         <div class="space-y-3">
           <h1 class="text-2xl font-semibold">{{ doctor.name }}</h1>
@@ -254,9 +261,11 @@ function goBooking(doctorId: string, slot: DoctorSlot) {
             <span class="px-2 py-1 border rounded">
               {{ doctor.specialtyName || doctor.specialty || 'Специальность не указана' }}
             </span>
-            <span>★ {{ doctor.rating ?? '—' }} <span class="text-gray-500">({{ doctor.reviewCount ?? 0 }} отзывов)</span></span>
+            <span>★ {{ doctor.rating ?? '—' }} <span class="text-gray-500">({{ doctor.reviewCount ?? 0 }}
+                отзывов)</span></span>
             <span v-if="doctor.experience != null">Стаж: <strong>{{ doctor.experience }}</strong> лет</span>
-            <span v-if="doctor.price != null">Цена: <strong>{{ new Intl.NumberFormat('ru-RU').format(doctor.price) }}</strong> ₸</span>
+            <span v-if="doctor.price != null">Цена: <strong>{{ new Intl.NumberFormat('ru-RU').format(doctor.price)
+                }}</strong> ₸</span>
           </div>
 
           <div v-if="doctor.education" class="text-sm">
@@ -293,33 +302,24 @@ function goBooking(doctorId: string, slot: DoctorSlot) {
 
         <div v-else class="space-y-4">
           <!-- Дни с доступными слотами -->
-          <div class="flex flex-wrap gap-3">
-            <button
-              v-for="d in week"
-              :key="d.date"
-              class="px-3 py-2 border rounded"
-                @click="openBooking(s)"
-              :class="selectedDate === d.date ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'"
-            
-              :title="d.isWeekend ? 'Выходной (работа до обеда)' : 'Рабочий день'"
-            >
-              {{ fmtDateKey(d.date) }}
-              <span v-if="d.isWeekend" class="ml-1 text-xs opacity-80">(до 14:00)</span>
-            </button>
-          </div>
+          <button v-for="d in week" :key="d.date" class="px-3 py-2 border rounded"
+            :class="selectedDate === d.date ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'"
+            @click="selectedDate = d.date" :title="d.isWeekend ? 'Выходной (работа до обеда)' : 'Рабочий день'">
+            {{ fmtDateKey(d.date) }}
+            <span v-if="d.isWeekend" class="ml-1 text-xs opacity-80">(до 14:00)</span>
+          </button>
 
-          <!-- Слоты выбранного дня -->
+          <!-- Слоты выбранного дня: открываем модалку -->
           <div v-if="selectedDate" class="flex flex-wrap gap-2">
-            <button
-              v-for="s in selectedSlots"
-              :key="s.id"
-              class="text-sm border rounded px-3 py-1 hover:bg-gray-50"
-              :title="`${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`"
-              @click="goBooking(id, s)"
-            >
+            <button v-for="s in selectedSlots" :key="s.id" class="text-sm border rounded px-3 py-1 hover:bg-gray-50"
+              :title="`${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`" @click="openBooking(s)">
               {{ fmtTime(s.startTime) }}–{{ fmtTime(s.endTime) }}
             </button>
           </div>
+
+          <!-- Модалка (по query.slotId) -->
+          <BookingModal v-if="showModal" :doctor-id="id" :slot-id="String(route.query.slotId || '')"
+            :start="String(route.query.start || '')" @close="closeModal" @success="" />
         </div>
       </div>
     </section>
@@ -371,11 +371,13 @@ function goBooking(doctorId: string, slot: DoctorSlot) {
 
           <!-- Пагинация отзывов -->
           <div class="flex items-center justify-center gap-2 pt-2">
-            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage <= 1" @click="reviewsPage--">
+            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage <= 1"
+              @click="reviewsPage--">
               Назад
             </button>
             <span>Стр. {{ reviewsPage }} из {{ reviewsPages }}</span>
-            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage >= reviewsPages" @click="reviewsPage++">
+            <button class="px-3 py-2 border rounded disabled:opacity-50" :disabled="reviewsPage >= reviewsPages"
+              @click="reviewsPage++">
               Вперёд
             </button>
 
