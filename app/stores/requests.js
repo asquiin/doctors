@@ -7,27 +7,41 @@ export const useRequestsStore = defineStore('requests', () => {
   const getData = async (params = {}) => {
     loading.value = true
     error.value = null
-
     try {
-      // базовый URL можно хранить в nuxt.config.ts → runtimeConfig.public.apiBase
       const { public: { apiBase } } = useRuntimeConfig()
-
-      // запрос
       const res = await $fetch(`${apiBase}/doctors`, {
         method: 'GET',
-        query: params, // например { page: 1, sortBy: 'rating', sortOrder: 'desc' }
+        query: params,
+        credentials: 'include',
       })
-
       data.value = res
       return res
     } catch (e) {
       error.value = e?.data?.message || e?.message || 'Ошибка загрузки данных'
-      console.error('getData error:', e)
       throw e
     } finally {
       loading.value = false
     }
   }
 
-  return { data, loading, error, getData }
+  // 👇 POST /auth/login
+  const postLogin = async (payload) => {
+    const { public: { apiBase } } = useRuntimeConfig()
+    return $fetch(`${apiBase}/auth/login`, {
+      method: 'POST',
+      body: payload,
+      credentials: 'include',
+    })
+  }
+
+  // 👇 GET /auth/me
+  const getMe = async () => {
+    const { public: { apiBase } } = useRuntimeConfig()
+    return $fetch(`${apiBase}/auth/me`, {
+      method: 'GET',
+      credentials: 'include',
+    })
+  }
+
+  return { data, loading, error, getData, postLogin, getMe }
 })
