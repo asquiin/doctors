@@ -26,27 +26,13 @@ async function onSubmit() {
   formError.value = null
 
   try {
-    // POST /api/auth/login (с куки, если бэк ставит httpOnly cookie)
     await $fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       body: { email: email.value, password: password.value },
       credentials: 'include',
     })
 
-    // подтянуть актуальные данные пользователя
-    const me = await $fetch(`${apiBase}/auth/me`, {
-      method: 'GET',
-      credentials: 'include',
-    })
-    // сохраним в pinia (см. пункт 2)
-    const auth = useAuthStore()
-    auth.setUser(me)
-
-    // редирект: обратно или на /
-    const redirect = (route.query.redirect as string) || '/'
-    // если пришли со страницы врача/слота — вернёмся назад
-    if (redirect === 'back') router.back()
-    else router.push(redirect)
+    await router.replace('/') 
   } catch (e: any) {
     formError.value = e?.data?.message || e?.message || 'Не удалось авторизоваться'
   } finally {
