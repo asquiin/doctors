@@ -6,7 +6,6 @@ export const useRequestsStore = defineStore('requests', () => {
   const user = ref(null)
   const token = ref(null)
 
-  // инициализация токена из localStorage
   if (process.client) {
     token.value = localStorage.getItem('token')
     console.log('[init] token from LS =', token.value)
@@ -14,7 +13,6 @@ export const useRequestsStore = defineStore('requests', () => {
 
   const { public: { apiBase } } = useRuntimeConfig()
 
-  // --- хелперы ---
   function setToken(t) {
     token.value = t || null
     if (process.client) {
@@ -26,11 +24,9 @@ export const useRequestsStore = defineStore('requests', () => {
   function clearAuth() { user.value = null; setToken(null) }
 
   function bearerAuth() {
-    // именно Bearer <token>, как в swagger-е
     return token.value ? { Authorization: `Bearer ${token.value}` } : {}
   }
 
-  // --- API вызовы ---
   const getData = async (params = {}) => {
     loading.value = true
     error.value = null
@@ -64,7 +60,7 @@ export const useRequestsStore = defineStore('requests', () => {
     if (!token.value) throw new Error('Нет токена')
     const res = await $fetch(`${apiBase}/auth/me`, {
       method: 'GET',
-      headers: bearerAuth(), // 🔹 сюда добавляем Authorization: Bearer ...
+      headers: bearerAuth(),
     })
     setUser(res)
     return res
