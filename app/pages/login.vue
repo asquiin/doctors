@@ -1,24 +1,18 @@
-<!-- pages/login.vue -->
 <script setup lang="ts">
-definePageMeta({ layout: 'default.vue' })
+definePageMeta({ layout: 'default' })
 
 const router = useRouter()
-const route = useRoute()
-
-// локальный стейт формы
 const email = ref('')
 const password = ref('')
 const showPass = ref(false)
 const formError = ref<string | null>(null)
 const submitting = ref(false)
 
-// простая валидация
 const emailValid = computed(() => /\S+@\S+\.\S+/.test(email.value))
-const passValid  = computed(() => password.value.length >= 6)
-const canSubmit  = computed(() => emailValid.value && passValid.value && !submitting.value)
+const passValid = computed(() => password.value.length >= 6)
+const canSubmit = computed(() => emailValid.value && passValid.value && !submitting.value)
 
-// API base
-const { public: { apiBase } } = useRuntimeConfig()
+const requests = useRequestsStore()
 
 async function onSubmit() {
   if (!canSubmit.value) return
@@ -26,13 +20,17 @@ async function onSubmit() {
   formError.value = null
 
   try {
-    await $fetch(`${apiBase}/auth/login`, {
-      method: 'POST',
-      body: { email: email.value, password: password.value },
-      credentials: 'include',
+    // 🔹 вызываем централизованный экшен
+    await requests.postLogin({
+      email: email.value,
+      password: password.value,
     })
 
-    await router.replace('/') 
+
+    // const me = await requests.getMe()
+    // console.log('User:', me)
+
+    await router.replace('/')
   } catch (e: any) {
     formError.value = e?.data?.message || e?.message || 'Не удалось авторизоваться'
   } finally {
@@ -40,6 +38,7 @@ async function onSubmit() {
   }
 }
 </script>
+
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-gray-50 p-6">

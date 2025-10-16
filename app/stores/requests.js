@@ -3,6 +3,8 @@ export const useRequestsStore = defineStore('requests', () => {
   const loading = ref(false)
   const error = ref(null)
 
+  const auth = useAuthStore() 
+
   const getData = async (params = {}) => {
     loading.value = true
     error.value = null
@@ -11,7 +13,7 @@ export const useRequestsStore = defineStore('requests', () => {
       const res = await $fetch(`${apiBase}/doctors`, {
         method: 'GET',
         query: params,
-        credentials: 'include',
+        headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
       })
       data.value = res
       return res
@@ -28,15 +30,14 @@ export const useRequestsStore = defineStore('requests', () => {
     return $fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       body: payload,
-      credentials: 'include',
     })
   }
 
   const getMe = async () => {
     const { public: { apiBase } } = useRuntimeConfig()
+    const auth = useAuthStore()
     return $fetch(`${apiBase}/auth/me`, {
-      method: 'GET',
-      credentials: 'include',
+      headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
     })
   }
 
