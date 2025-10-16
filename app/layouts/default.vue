@@ -8,7 +8,6 @@ const { user, token } = storeToRefs(store)
 const router = useRouter()
 const { public: { apiBase } } = useRuntimeConfig()
 
-// при монтировании пробуем получить профиль, если токен есть и user ещё не загружен
 onMounted(async () => {
   if (token.value && !user.value) {
     try {
@@ -37,7 +36,7 @@ async function logout() {
   <header class="p-4 bg-gray-800 text-white flex justify-between">
     <NuxtLink to="/">Главная</NuxtLink>
      <nav class="flex gap-4 items-center">
-      <NuxtLink to="/doctors">Врачи</NuxtLink>
+  
 
       <!-- Если залогинен — аватарка -->
       <div v-if="user" class="flex items-center gap-3">
