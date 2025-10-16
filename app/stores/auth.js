@@ -1,6 +1,5 @@
-// stores/auth.js
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref(null) // { id, name, email, avatar, ... }
+  const user = ref(null) 
 
   function setUser(payload) {
     user.value = payload
@@ -9,7 +8,6 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
-  // удобный экшен для /auth/me
   const fetchMe = async () => {
     const { public: { apiBase } } = useRuntimeConfig()
     try {

@@ -1,4 +1,3 @@
-// stores/requests.js
 export const useRequestsStore = defineStore('requests', () => {
   const data = ref(null)
   const loading = ref(false)
@@ -24,7 +23,6 @@ export const useRequestsStore = defineStore('requests', () => {
     }
   }
 
-  // 👇 POST /auth/login
   const postLogin = async (payload) => {
     const { public: { apiBase } } = useRuntimeConfig()
     return $fetch(`${apiBase}/auth/login`, {
@@ -34,7 +32,6 @@ export const useRequestsStore = defineStore('requests', () => {
     })
   }
 
-  // 👇 GET /auth/me
   const getMe = async () => {
     const { public: { apiBase } } = useRuntimeConfig()
     return $fetch(`${apiBase}/auth/me`, {

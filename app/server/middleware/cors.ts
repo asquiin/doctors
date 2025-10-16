@@ -1,4 +1,3 @@
-// server/middleware/cors.ts
 export default defineEventHandler((event) => {
   const origin = getHeader(event, 'origin') || '*'
   setHeader(event, 'Access-Control-Allow-Origin', origin)
